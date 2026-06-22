@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/nexus_ai_service.dart';
 
 class QaEngineScreen extends StatefulWidget {
   const QaEngineScreen({super.key});
@@ -9,8 +10,27 @@ class QaEngineScreen extends StatefulWidget {
 
 class _QaEngineScreenState extends State<QaEngineScreen> {
   final _queryController = TextEditingController();
+  final _aiService = NexusAiService();
   bool _isSimplified = false;
-  bool _hasAnswer = false;
+  bool _isLoading = false;
+  String _sourceDocument = '';
+  List<String> _answerSteps = [];
+
+  void _submitQuery() async {
+    if (_queryController.text.trim().isEmpty) return;
+    setState(() {
+      _isLoading = true;
+      _answerSteps = [];
+    });
+
+    final output = await _aiService.answerAcademicQuery(_queryController.text, _isSimplified);
+
+    setState(() {
+      _sourceDocument = output['source'] ?? 'Unknown Reference Block';
+      _answerSteps = List<String>.from(output['steps'] ?? []);
+      _isLoading = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -22,28 +42,20 @@ class _QaEngineScreenState extends State<QaEngineScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'Grounded Q&A Engine',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-              ),
+              const Text('Grounded Q&A Engine', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
               Row(
                 children: [
                   const Text('Simplify Jargon', style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
                   Switch(
                     value: _isSimplified,
                     activeThumbColor: Theme.of(context).colorScheme.secondary,
-                    onChanged: (val) {
-                      setState(() => _isSimplified = val);
-                    },
+                    onChanged: (val) => setState(() => _isSimplified = val),
                   ),
                 ],
               )
             ],
           ),
-          const Text(
-            'Ask academic questions grounded directly in verified curriculum material.',
-            style: TextStyle(color: Color(0xFF94A3B8)),
-          ),
+          const Text('Ask academic questions grounded directly in verified curriculum material.', style: TextStyle(color: Color(0xFF94A3B8))),
           const SizedBox(height: 16),
           Row(
             children: [
@@ -51,25 +63,18 @@ class _QaEngineScreenState extends State<QaEngineScreen> {
                 child: TextField(
                   controller: _queryController,
                   decoration: InputDecoration(
-                    hintText: 'Ask an engineering concept or past proof query...',
+                    hintText: 'e.g., How do I solve system balancing constraints?',
                     hintStyle: const TextStyle(color: Color(0xFF64748B)),
                     fillColor: const Color(0xFF1E293B),
                     filled: true,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                   ),
                 ),
               ),
               const SizedBox(width: 8),
               IconButton.filled(
-                onPressed: () {
-                  if (_queryController.text.trim().isNotEmpty) {
-                    setState(() => _hasAnswer = true);
-                  }
-                },
-                icon: const Icon(Icons.send),
+                onPressed: _isLoading ? null : _submitQuery,
+                icon: _isLoading ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.send),
                 style: IconButton.styleFrom(
                   backgroundColor: Theme.of(context).colorScheme.primary,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -80,7 +85,7 @@ class _QaEngineScreenState extends State<QaEngineScreen> {
           ),
           const SizedBox(height: 20),
           Expanded(
-            child: _hasAnswer
+            child: _answerSteps.isNotEmpty
                 ? SingleChildScrollView(
                     child: Card(
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -89,53 +94,23 @@ class _QaEngineScreenState extends State<QaEngineScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Row(
+                            Row(
                               children: [
-                                Icon(Icons.verified, color: Color(0xFF10B981), size: 18),
-                                SizedBox(width: 6),
-                                Text(
-                                  'Grounded Context: EEE2046F Core Syllabus Module 3',
-                                  style: TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 12),
-                                ),
+                                const Icon(Icons.verified, color: Color(0xFF10B981), size: 18),
+                                const SizedBox(width: 6),
+                                Expanded(child: Text('Grounded Context: $_sourceDocument', style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 12))),
                               ],
                             ),
                             const Divider(height: 24, color: Color(0xFF334155)),
-                            Text(
-                              _isSimplified 
-                                ? 'Here is a simple, intuitive layout breakdown:' 
-                                : 'Step-by-Step Analytical Execution Framework:',
-                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                            ),
+                            Text(_isSimplified ? 'Intuitive Conceptual Breakdown:' : 'Step-by-Step Analytical Framework:', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                             const SizedBox(height: 12),
-                            _buildStep(
-                              '1', 
-                              _isSimplified 
-                                ? 'Isolate the system\'s physical parts and draw pointing arrows for all forces acting on it.' 
-                                : 'Establish spatial vector equilibrium frameworks and map discrete component interactions.'
-                            ),
-                            _buildStep(
-                              '2', 
-                              _isSimplified 
-                                ? 'Sum up everything pushing or pulling horizontally and vertically to set your mathematical baseline.' 
-                                : 'Execute an algebraic summation of orthogonal vectors relative to the primary plane constraints.'
-                            ),
-                            _buildStep(
-                              '3', 
-                              _isSimplified 
-                                ? 'Double-check twisting forces around the central anchor to make sure it doesn\'t move.' 
-                                : 'Evaluate the secondary moment constraints about the structural pivot coordinates to prevent runtime calculation drift.'
-                            ),
+                            ...List.generate(_answerSteps.length, (i) => _buildStep((i + 1).toString(), _answerSteps[i])),
                           ],
                         ),
                       ),
                     ),
                   )
-                : const Center(
-                    child: Text(
-                      'Submit a curriculum question to trigger RAG document extraction.',
-                      style: TextStyle(color: Color(0xFF64748B)),
-                    ),
-                  ),
+                : Center(child: Text(_isLoading ? 'Running RAG processing engine...' : 'Submit a question to execute context document extraction.', style: const TextStyle(color: Color(0xFF64748B)))),
           )
         ],
       ),
@@ -154,9 +129,7 @@ class _QaEngineScreenState extends State<QaEngineScreen> {
             child: Text(number, style: TextStyle(color: Theme.of(context).colorScheme.primary, fontSize: 12, fontWeight: FontWeight.bold)),
           ),
           const SizedBox(width: 12),
-          Expanded(
-            child: Text(text, style: const TextStyle(color: Color(0xFFCBD5E1), height: 1.4)),
-          ),
+          Expanded(child: Text(text, style: const TextStyle(color: Color(0xFFCBD5E1), height: 1.4))),
         ],
       ),
     );
